@@ -217,219 +217,220 @@ public class Lexer {
     }
 
 
-// main tokenization function
- private void tokenize(String code) {
-     code = code + '\0';
-     int i = 0;
-     int line = 1;
-     int column = 1;
-    List<String> ops = new ArrayList<>(Arrays.asList(Operators));
-     do {
+    // main tokenization function
+    private void tokenize(String code) {
+        code = code + '\0';
+        int i = 0;
+        int line = 1;
+        int column = 1;
+        List<String> ops = new ArrayList<>(Arrays.asList(Operators));
+        do {
 
-         char c = code.charAt(i);
+            char c = code.charAt(i);
             // maintain line and column count
-         if (c == '\n') {
-             line++;
-             column = 1;
-         } else {
-             column++;
-         }
+            if (c == '\n') {
+                line++;
+                column = 1;
+            } else {
+                column++;
+            }
 
-         // skip whitespace
-         if (Character.isWhitespace(c)) {
-             i++;
-             continue;
-         }
+            // skip whitespace
+            if (Character.isWhitespace(c)) {
+                i++;
+                continue;
+            }
 
-         // comments
-         if (c == '/') {
-             char nxt = code.charAt(i + 1);
+            // comments
+            if (c == '/') {
+                char nxt = code.charAt(i + 1);
 
-        //single line
-             if (nxt == '/') {
-                 i += 2;
-                 do{
-                     char cc = code.charAt(i);
-                     if (cc == '\n' || cc == '\0') break;
-                     i++; // skip everything until newline
-                 }while (true);
-                 continue;
-             }
-
-             // multi-line comment
-             else if (nxt == '*') {
-                int start = i;
-                int j = i + 2;
-                int tempLine = line;
-                boolean closed = false;
-
-                while (true) {
-                    char cc = code.charAt(j);
-                    if (cc == '\0') break;
-                    if (cc == '\n') tempLine++;
-                    if (cc == '*' && code.charAt(j + 1) == '/') {
-                        i = j + 2;
-                        line = tempLine;
-                        closed = true;
-                        break;
-                    }
-                    j++;
+                //single line
+                if (nxt == '/') {
+                    i += 2;
+                    do{
+                        char cc = code.charAt(i);
+                        if (cc == '\n' || cc == '\0') break;
+                        i++; // skip everything until newline
+                    }while (true);
+                    continue;
                 }
 
-                if (!closed) {
-                    int commentStartIndex = start;
-                    int lastNl = code.lastIndexOf('\n', commentStartIndex - 1);
-                    int commentStartColumn = (lastNl == -1) ? (commentStartIndex + 1) : (commentStartIndex - lastNl);
+                // multi-line comment
+                else if (nxt == '*') {
+                    int start = i;
+                    int j = i + 2;
+                    int tempLine = line;
+                    boolean closed = false;
 
-                    errors.add(ErrorReporter.reportUnterminatedComment(line, commentStartColumn));
-                    i = start + 2;
-                    int lastNewlineBeforeI = code.lastIndexOf('\n', i - 1);
-                    if (lastNewlineBeforeI == -1) {
-                        column = i + 1;
-                    } else {
-                        column = i - lastNewlineBeforeI;
+                    while (true) {
+                        char cc = code.charAt(j);
+                        if (cc == '\0') break;
+                        if (cc == '\n') tempLine++;
+                        if (cc == '*' && code.charAt(j + 1) == '/') {
+                            i = j + 2;
+                            line = tempLine;
+                            closed = true;
+                            break;
+                        }
+                        j++;
                     }
+
+                    if (!closed) {
+                        int commentStartIndex = start;
+                        int lastNl = code.lastIndexOf('\n', commentStartIndex - 1);
+                        int commentStartColumn = (lastNl == -1) ? (commentStartIndex + 1) : (commentStartIndex - lastNl);
+
+                        errors.add(ErrorReporter.reportUnterminatedComment(line, commentStartColumn));
+                        i = start + 2;
+                        int lastNewlineBeforeI = code.lastIndexOf('\n', i - 1);
+                        if (lastNewlineBeforeI == -1) {
+                            column = i + 1;
+                        } else {
+                            column = i - lastNewlineBeforeI;
+                        }
+                    }
+                    continue;
+                }
+            }
+            //delimiters
+            if (isDelimiter(c)) {
+                tokens.add(new Token(TokenType.DELIMITER, "" + c, line));
+                i++;
+                continue;
+            }
+            int bestMatchLen = 0;
+            String bestMatchOp = null;
+
+            for (String op : ops) {
+                String opWithSentinel = op + '\0';
+                int k = 0;
+                while (true) {
+                    char opChar = opWithSentinel.charAt(k);
+                    char codeChar = code.charAt(i + k);
+                    if (opChar == '\0') {
+                        if (k > bestMatchLen) {
+                            bestMatchLen = k;
+                            bestMatchOp = op;
+                        }
+                        break;
+                    }
+                    if (opChar != codeChar) break;
+                    k++;
+                }
+            }
+
+            if (bestMatchLen > 0) {
+                tokens.add(new Token(TokenType.OPERATOR, bestMatchOp, line));
+                i += bestMatchLen;
+                continue;
+            }
+
+            //strings
+            if (c == '"' || c == '\'') {
+                char quote = c;
+                StringBuilder sb = new StringBuilder();
+                sb.append(quote);
+                i++;
+                int strLine = line;
+
+                boolean closed = false;
+                while (true) {
+                    char ch = code.charAt(i);
+                    if (ch == '\0' || ch == '\n') break;
+                    sb.append(ch);
+                    i++;
+                    if (ch == quote) { closed = true; break; }
+                    if (ch == '\\') {
+                        char esc = code.charAt(i);
+                        if (esc != '\0') { sb.append(esc); i++; }
+                    }
+                }
+
+                if (closed) {
+                    tokens.add(new Token(TokenType.STRING, sb.toString(), strLine));
+                } else {
+                    errors.add(ErrorReporter.reportUnterminatedString(strLine, column, sb.toString()));
+                    if (code.charAt(i) == '\n') { line++; i++; }
+                    else if (code.charAt(i) == '\0') { }
                 }
                 continue;
             }
-         }
-      //delimiters
-         if (isDelimiter(c)) {
-             tokens.add(new Token(TokenType.DELIMITER, "" + c, line));
-             i++;
-             continue;
-         }
-         int bestMatchLen = 0;
-         String bestMatchOp = null;
 
-         for (String op : ops) {
-             String opWithSentinel = op + '\0';
-             int k = 0;
-             while (true) {
-                 char opChar = opWithSentinel.charAt(k);
-                 char codeChar = code.charAt(i + k);
-                 if (opChar == '\0') {
-                     if (k > bestMatchLen) {
-                         bestMatchLen = k;
-                         bestMatchOp = op;
-                     }
-                     break;
-                 }
-                 if (opChar != codeChar) break;
-                 k++;
-             }
-         }
+            // identifiers, numbers, and invalid tokens
+            StringBuilder tokenBuilder = new StringBuilder();
+            int tokenStartLine = line;
+            int tokenStartColumn = column;
+            boolean hasChar = false;
+            char tokenFirstChar = code.charAt(i);
 
-         if (bestMatchLen > 0) {
-             tokens.add(new Token(TokenType.OPERATOR, bestMatchOp, line));
-             i += bestMatchLen;
-             continue;
-         }
+            do {
+                char cc = code.charAt(i);
+                boolean isDotAllowedInNumber = (tokenFirstChar >= '0' && tokenFirstChar <= '9') && (cc == '.');
 
-         //strings
-         if (c == '"' || c == '\'') {
-             char quote = c;
-             StringBuilder sb = new StringBuilder();
-             sb.append(quote);
-             i++;
-             int strLine = line;
+                boolean stop =
+                        cc == '\0' ||
+                                Character.isWhitespace(cc) ||
+                                (isDelimiter(cc) && !isDotAllowedInNumber) ||
+                                cc == '"' || cc == '\'' || cc == '`' ||
+                                (cc == '/' && (code.charAt(i + 1) == '/' || code.charAt(i + 1) == '*'));
 
-             boolean closed = false;
-             while (true) {
-                 char ch = code.charAt(i);
-                 if (ch == '\0' || ch == '\n') break;
-                 sb.append(ch);
-                 i++;
-                 if (ch == quote) { closed = true; break; }
-                 if (ch == '\\') { 
-                     char esc = code.charAt(i);
-                     if (esc != '\0') { sb.append(esc); i++; }
-                 }
-             }
+                if (stop) break;
 
-             if (closed) {
-                 tokens.add(new Token(TokenType.STRING, sb.toString(), strLine));
-             } else {
-                 errors.add(ErrorReporter.reportUnterminatedString(strLine, column, sb.toString()));
-                 if (code.charAt(i) == '\n') { line++; i++; }
-                 else if (code.charAt(i) == '\0') { }
-             }
-             continue;
-         }
 
-         // identifiers, numbers, and invalid tokens
-         StringBuilder tokenBuilder = new StringBuilder();
-         int tokenStartLine = line;
-         int tokenStartColumn = column;
-         boolean hasChar = false;
-         char tokenFirstChar = code.charAt(i);
-
-         do {
-             char cc = code.charAt(i);
-         boolean isDotAllowedInNumber = (tokenFirstChar >= '0' && tokenFirstChar <= '9') && (cc == '.');
-
-         boolean stop =
-             cc == '\0' ||
-                 Character.isWhitespace(cc) ||
-                 (isDelimiter(cc) && !isDotAllowedInNumber) ||
-                 cc == '"' || cc == '\'' || cc == '`' ||
-                 (cc == '/' && (code.charAt(i + 1) == '/' || code.charAt(i + 1) == '*'));
-
-             if (stop) break;
-
-             
-             boolean opHere = false;
-             for (String op : ops) {
-                 String opWithSentinel = op + '\0';
-                 int k = 0;
-                 while (true) {
-                     char opChar = opWithSentinel.charAt(k);
-                     char codeChar = code.charAt(i + k);
-                     if (opChar == '\0') { opHere = true; break; }
-                     if (opChar != codeChar) break;
-                     k++;
-                 }
-                if (tokenFirstChar >= '0' && tokenFirstChar <= '9' && sameString(op, ".")) {
-                    opHere = false;
+                boolean opHere = false;
+                for (String op : ops) {
+                    String opWithSentinel = op + '\0';
+                    int k = 0;
+                    while (true) {
+                        char opChar = opWithSentinel.charAt(k);
+                        char codeChar = code.charAt(i + k);
+                        if (opChar == '\0') { opHere = true; break; }
+                        if (opChar != codeChar) break;
+                        k++;
+                    }
+                    if (tokenFirstChar >= '0' && tokenFirstChar <= '9' && sameString(op, ".")) {
+                        opHere = false;
+                    }
+                    if (opHere) break;
                 }
-                 if (opHere) break;
-             }
-             if (opHere) break;
+                if (opHere) break;
 
-             tokenBuilder.append(cc);
-             i++;
-             column++;
-             hasChar = true;
-         } while (true);
+                tokenBuilder.append(cc);
+                i++;
+                column++;
+                hasChar = true;
+            } while (true);
 
-         if (hasChar) {
-             String tokenStr = tokenBuilder.toString();
+            if (hasChar) {
+                String tokenStr = tokenBuilder.toString();
 
-             char first = tokenStr.charAt(0);
-             if (first >= '0' && first <= '9') {
-                 if (isNumber(tokenStr)) {
-                     tokens.add(new Token(TokenType.NUMBER, tokenStr, tokenStartLine));
-                 } else {
-                     errors.add(ErrorReporter.reportInvalidNumber(tokenStartLine, tokenStartColumn, tokenStr));
-                 }
-            } else if ((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_' || first == '$') {
-                 if (isKeyword(tokenStr)) tokens.add(new Token(TokenType.KEYWORD, tokenStr, tokenStartLine));
-                 else if (isPersonalKeyword(tokenStr)) tokens.add(new Token(TokenType.PERSONAL_KEYWORD, tokenStr, tokenStartLine));
-                 else if (isIdentifier(tokenStr)) tokens.add(new Token(TokenType.IDENTIFIER, tokenStr, tokenStartLine));
-                 else errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
-            } else {
-                if (tokenStr.length() == 1) {
-                    char bad = tokenStr.charAt(0);
-                    errors.add(ErrorReporter.reportUnexpectedChar(tokenStartLine, tokenStartColumn, bad));
+                char first = tokenStr.charAt(0);
+                if (first >= '0' && first <= '9') {
+                    if (isNumber(tokenStr)) {
+                        tokens.add(new Token(TokenType.NUMBER, tokenStr, tokenStartLine));
+                    } else {
+                        errors.add(ErrorReporter.reportInvalidNumber(tokenStartLine, tokenStartColumn, tokenStr));
+                    }
+                } else if ((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_' || first == '$') {
+                    if (isKeyword(tokenStr)) tokens.add(new Token(TokenType.KEYWORD, tokenStr, tokenStartLine));
+                    else if (isPersonalKeyword(tokenStr)) tokens.add(new Token(TokenType.PERSONAL_KEYWORD, tokenStr, tokenStartLine));
+                    else if (isIdentifier(tokenStr)) tokens.add(new Token(TokenType.IDENTIFIER, tokenStr, tokenStartLine));
+                    else errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
                 } else {
-                    errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
+                    if (tokenStr.length() == 1) {
+                        char bad = tokenStr.charAt(0);
+                        errors.add(ErrorReporter.reportUnexpectedChar(tokenStartLine, tokenStartColumn, bad));
+                    } else {
+                        errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
+                    }
                 }
             }
-         }
 
-     } while (code.charAt(i) != '\0');
- }
+        } while (code.charAt(i) != '\0');
+    }
     public Lexer(String code) {
         tokenize(code);
     }
 }
+
