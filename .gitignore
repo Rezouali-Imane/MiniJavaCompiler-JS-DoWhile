@@ -1,17 +1,16 @@
-# Compiled class file
+# Compiled class files
 *.class
 
-# Log file
+# Build output
+out/
+bin/
+
+# Log files
 *.log
 
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
+# Package files
 *.jar
+!dist/*.jar
 *.war
 *.nar
 *.ear
@@ -19,6 +18,17 @@
 *.tar.gz
 *.rar
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
+# IDE configs
+.idea/
+*.iml
+.vscode/
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# JVM crash logs
 hs_err_pid*
 replay_pid*
