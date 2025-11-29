@@ -33,9 +33,33 @@ public class ErrorReporter {
 
 
 
+
+
     // Parser error reporting utility
     public static String reportSyntaxError(int line, String message) {
         return "Error at line " + line + ": " + message;
+    }
+
+    // Unexpected token where a specific token was expected.
+    public static String reportUnexpectedToken(int line, int column, String expected, String found) {
+        String colStr = column > 0 ? ", column " + column : "";
+        return "Error at line " + line + colStr + ": Expected " + expected + ", but found '" + found + "'";
+    }
+
+    // Missing token / punctuation (e.g. missing ';', ')' or '}').
+    public static String reportMissingToken(int line, int column, String missingDescription) {
+        String colStr = column > 0 ? ", column " + column : "";
+        return "Error at line " + line + colStr + ": Missing " + missingDescription;
+    }
+
+    // Convenience when an identifier was expected.
+    public static String reportIdentifierExpected(int line, int column) {
+        return reportMissingToken(line, column, "identifier");
+    }
+
+    // Convenience when a semicolon was expected.
+    public static String reportSemicolonExpected(int line, int column) {
+        return reportMissingToken(line, column, "';'");
     }
 
 
