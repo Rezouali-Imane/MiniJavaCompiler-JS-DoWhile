@@ -27,7 +27,8 @@ public class Lexer {
         OPERATOR,
         DELIMITER,
         STRING,
-        INVALID
+        INVALID,
+        ODF
     }
     //token class
     public class Token {
@@ -434,10 +435,12 @@ public class Lexer {
                 }
             }
 
+
         } while (code.charAt(i) != '\0');
+        tokens.add(new Token(TokenType.ODF, "\0", line));
     }
 
-    public Lexer(String code) {
+    public Lexer(String code, List<String> errors) {
         tokenize(code);
     }
 }
