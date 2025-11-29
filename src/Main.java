@@ -146,40 +146,50 @@ public class Main {
                 doc.setCharacterAttributes(startIndex, val.length(),
                         sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, color), true);
                 searchPos = startIndex + val.length();
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
     }
+
 }
+    class LineNumber extends JPanel {
+        private final JTextPane textPane;
+        private final Font font = new Font("Monospaced", Font.PLAIN, 14);
 
-class LineNumber extends JPanel {
-    private final JTextPane textPane;
-    private final Font font = new Font("Monospaced", Font.PLAIN, 14);
+        public LineNumber(JTextPane textPane) {
+            this.textPane = textPane;
+            setPreferredSize(new Dimension(50, Integer.MAX_VALUE));
+            setBackground(Color.BLACK);
+            setForeground(Color.WHITE);
 
-    public LineNumber(JTextPane textPane) {
-        this.textPane = textPane;
-        setPreferredSize(new Dimension(50, Integer.MAX_VALUE));
-        setBackground(Color.BLACK);
-        setForeground(Color.WHITE);
+            textPane.getDocument().addDocumentListener(new DocumentListener() {
+                public void insertUpdate(DocumentEvent e) {
+                    repaint();
+                }
 
-        textPane.getDocument().addDocumentListener(new DocumentListener() {
-            public void insertUpdate(DocumentEvent e) { repaint(); }
-            public void removeUpdate(DocumentEvent e) { repaint(); }
-            public void changedUpdate(DocumentEvent e) { repaint(); }
-        });
-    }
+                public void removeUpdate(DocumentEvent e) {
+                    repaint();
+                }
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-        g.setColor(getForeground());
-        g.setFont(font);
-        int lineHeight = textPane.getFontMetrics(textPane.getFont()).getHeight();
-        int y = lineHeight;
+                public void changedUpdate(DocumentEvent e) {
+                    repaint();
+                }
+            });
+        }
 
-        int totalLines = textPane.getDocument().getDefaultRootElement().getElementCount();
-        for (int i = 1; i <= totalLines; i++) {
-            g.drawString(String.valueOf(i), 5, y - 4);
-            y += lineHeight;
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            g.setColor(getForeground());
+            g.setFont(font);
+            int lineHeight = textPane.getFontMetrics(textPane.getFont()).getHeight();
+            int y = lineHeight;
+
+            int totalLines = textPane.getDocument().getDefaultRootElement().getElementCount();
+            for (int i = 1; i <= totalLines; i++) {
+                g.drawString(String.valueOf(i), 5, y - 4);
+                y += lineHeight;
+            }
         }
     }
-}
+

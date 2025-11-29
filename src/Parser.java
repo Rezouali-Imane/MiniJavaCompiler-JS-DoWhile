@@ -221,16 +221,20 @@ public class Parser {
     private boolean Value() {
         int line = current != null ? current.line : -1;
         if (current != null) {
-            if (current.type == Lexer.TokenType.IDENTIFIER || current.type == Lexer.TokenType.NUMBER || current.type == Lexer.TokenType.STRING) {
+            // Accept identifiers, numbers, strings, AND boolean literals
+            if (current.type == Lexer.TokenType.IDENTIFIER
+                    || current.type == Lexer.TokenType.NUMBER
+                    || current.type == Lexer.TokenType.STRING
+                    || (current.type == Lexer.TokenType.KEYWORD &&
+                    ("true".equals(current.value) || "false".equals(current.value)))) {
                 nextToken();
                 return true;
             }
-            // parenthesized expression
+
+            // Parenthesized expression
             if ("(".equals(current.value)) {
                 nextToken();
-                if (!Expression()) {
-                    return false;
-                }
+                if (!Expression()) return false;
                 if (!consumeValue(")")) {
                     localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ')' after parenthesized expression"));
                     return false;
@@ -238,9 +242,10 @@ public class Parser {
                 return true;
             }
         }
-        localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected a valid value (identifier, number, or string)"));
+        localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected a valid value (identifier, number, string, or boolean)"));
         return false;
     }
+
 
     private boolean Declaration() {
         int line = current != null ? current.line : -1;
@@ -299,8 +304,4 @@ public class Parser {
         return "==".equals(op) || "!=".equals(op) || "<".equals(op) || 
                ">".equals(op) || "<=".equals(op) || ">=".equals(op); 
     }
-
-    public static void main(String[] args) {
-    }
-
 }
