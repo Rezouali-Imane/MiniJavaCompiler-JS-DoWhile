@@ -3,22 +3,25 @@ import java.util.List;
 public class Parser {
 
     private final List<Lexer.Token> tokens;
-	private final List<String> error;
+    private final List<String> errors;       // shared list passed from Main
+    private final List<String> localErrors;  // accumulate internal errors; merge on failure
     private int index = 0;
     private Lexer.Token current;
 
-    public Parser(Lexer lexer, List<String> error) {
+    public Parser(Lexer lexer, List<String> errors) {
         this.tokens = lexer.getTokens();
-        this.error = error;
-        this.current = (tokens != null && !tokens.isEmpty()) ? tokens.get(0) : null;
+        this.errors = errors;
+        this.localErrors = new java.util.ArrayList<>();
+        // lexer always appends an ODF token, so tokens should contain at least one element
+        this.current = tokens.get(0);
     }
 
     private void nextToken() {
         index++;
-        current = (index < tokens.size()) ? tokens.get(index) : null;
+        current = tokens.get(index);
     }
 
-    public boolean consumeValue(String v) {
+    private boolean consumeValue(String v) {
         if (v == null || current == null) return false;
         if (v.equals(current.value)) {
             nextToken();
@@ -27,193 +30,224 @@ public class Parser {
         return false;
     }
 
-    public boolean consumeType(Lexer.TokenType type) {
+    private boolean consumeType(Lexer.TokenType type) {
         if (type == null || current == null) return false;
         if (current.type == type) {
             nextToken();
             return true;
         }
-
         return false;
     }
 
-    public Lexer.Token currentToken() {
-        return current;
+    private boolean isAtEnd() {
+        return current == null || current.type == Lexer.TokenType.ODF;
     }
-
-
-    //we start parsing from here
 
     // Program -> StatementList EOF
     public boolean Program() {
-        if(StatementList()) {
-            // parse all statements
-
-            if (current.type == Lexer.TokenType.ODF) {
-                return true; // reached end of file
-            } else {
-                error.add(ErrorReporter.reportSyntaxError(current.line, "Expected end of file"));
-                return false;
-            }
-        }
-        return false;
-    }
-
-
-    // StatementList -> Statement*
-    public boolean StatementList() {
-        while (current.type != Lexer.TokenType.ODF && !"}".equals(current.value)) {
-            Statement();// parse one statement at a time
-        }
-        return true;  // epsilon allowed
-    }
-
-
-    // Statement -> DoWhile | Declaration | Assignment | OtherStatement
-    public boolean Statement() {
-        if (current.type == Lexer.TokenType.KEYWORD && "do".equals(current.value)) {
-            DoWhile();
-        } else if (current.type == Lexer.TokenType.KEYWORD && ("var".equals(current.value) || "let".equals(current.value) || "const".equals(current.value))) {
-            Declaration();
-        } else if (current.type == Lexer.TokenType.IDENTIFIER) {
-            Assignment();
-        } else if (current.value != null) {
-             OtherStatement();
-        }else{
-            error.add(ErrorReporter.reportSyntaxError(current.line,"Invalid statement"));
+        boolean ok = StatementList();
+        if (!ok) {
+            if (errors != null) errors.addAll(localErrors);
             return false;
         }
 
-		return true;
+        if (isAtEnd()) {
+            // success: do not merge localErrors
+            return true;
+        }
+
+        // not at EOF -> record error and merge
+        int line = current != null ? current.line : -1;
+        localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected end of file"));
+        if (errors != null) errors.addAll(localErrors);
+        return false;
+    }
+
+    // StatementList -> Statement*
+    public boolean StatementList() {
+        while (!isAtEnd() && !(current != null && "}".equals(current.value))) {
+            if (!Statement()) {
+                int line = current != null ? current.line : -1;
+                localErrors.add(ErrorReporter.reportSyntaxError(line, "Invalid statement in statement list"));
+                return false;
+            }
+        }
+        return true; // epsilon allowed
+    }
+
+    // Statement -> DoWhile | Declaration | Assignment | OtherStatement
+    public boolean Statement() {
+        if (current == null) {
+            localErrors.add(ErrorReporter.reportSyntaxError(-1, "Unexpected end of input while parsing statement"));
+            return false;
+        }
+
+        if (current.type == Lexer.TokenType.KEYWORD && "do".equals(current.value)) {
+            return DoWhile();
+        } else if (current.type == Lexer.TokenType.KEYWORD && ("var".equals(current.value) || "let".equals(current.value) || "const".equals(current.value))) {
+            return Declaration();
+        } else if (current.type == Lexer.TokenType.IDENTIFIER) {
+            // lookahead: if identifier followed by '=' it's an assignment, otherwise treat as other statement (calls, property access, etc.)
+            // rely on lexer sentinel token; peek the next token directly
+            Lexer.Token next = tokens.get(index + 1);
+            if (next.type == Lexer.TokenType.OPERATOR && "=".equals(next.value)) {
+                return Assignment();
+            } else {
+                return OtherStatement();
+            }
+        } else {
+            return OtherStatement();
+        }
     }
 
     private boolean DoWhile() {
-        if (consumeValue("do")) {
-            if (consumeValue("{")) {
-                if (Block()) {
-                    if (consumeValue("}")) {
-                        if (consumeValue("while")) {
-                            if (consumeValue("(")) {
-                                if (Expression()) {
-                                    if (consumeValue(")")) {
-                                        if (consumeValue(";")) {
-                                            return true;
-                                        } else {
-                                            error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ';'"));
-                                        }
-                                    } else {
-                                        error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ')'"));
-                                    }
-                                } else {
-                                    error.add(ErrorReporter.reportSyntaxError(current.line, "Expected expression in do-while condition"));
-                                }
-                            } else {
-                                error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '('"));
-                            }
-                        } else
-                            error.add(ErrorReporter.reportSyntaxError(current.line, "Expected 'while'"));
-                    } else {
-                        error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '}' after do-while block"));
-                    }
-                } else {
-                    error.add(ErrorReporter.reportSyntaxError(current.line, "Expected 'while' after do-while block"));
-                }
-            } else {
-                error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '{' after do"));
-            }
-
-        }else{
-            error.add(ErrorReporter.reportSyntaxError(current.line, "Invalid do-while statement"));
+        int line = current != null ? current.line : -1;
+        if (!consumeValue("do")) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected 'do' at start of do-while"));
+            return false;
         }
-        return false;
-
+        if (!Block()) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Invalid block after 'do'"));
+            return false;
+        }
+        if (!consumeValue("while")) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected 'while' after do-block"));
+            return false;
+        }
+        if (!consumeValue("(")) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected '(' after 'while'"));
+            return false;
+        }
+        if (!Expression()) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected expression in do-while condition"));
+            return false;
+        }
+        if (!consumeValue(")")) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ')' after do-while condition"));
+            return false;
+        }
+        if (!consumeValue(";")) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ';' after do-while statement"));
+            return false;
+        }
+        return true;
     }
+
     private boolean Block() {
-            if (StatementList()){
-            }else{
-				error.add(ErrorReporter.reportSyntaxError(current.line, "Expected statements inside block"));
-				}
-        return false;
+        int line = current != null ? current.line : -1;
+        if (!consumeValue("{")) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected '{' at start of block"));
+            return false;
+        }
+        if (!StatementList()) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Invalid statements inside block"));
+            return false;
+        }
+        if (!consumeValue("}")) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected '}' at end of block"));
+            return false;
+        }
+        return true;
     }
 
+    // Expression: Value ((op) Value)*  -- simple flat expression (no precedence)
     private boolean Expression() {
-        if (Value()) {
-            if (current.type == Lexer.TokenType.OPERATOR && isComparisonOperator(current.value)) {
-                nextToken();
-                if (Value()) {
-                    return true;
-                } else {
-                    error.add(ErrorReporter.reportSyntaxError(current.line,"Expected value after comparison operator"));
-                }
+        int line = current != null ? current.line : -1;
+        if (!Value()) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected a valid expression"));
+            return false;
+        }
+        while (current != null && current.type == Lexer.TokenType.OPERATOR && (isComparisonOperator(current.value) || isArithmeticOperator(current.value))) {
+            nextToken(); // consume operator
+            if (!Value()) {
+                localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected value after operator"));
+                return false;
             }
         }
-        return false;
+        return true;
+    }
+
+    private boolean isArithmeticOperator(String op) {
+        return "+".equals(op) || "-".equals(op) || "*".equals(op) || "/".equals(op) || "%".equals(op);
     }
 
     private boolean Value() {
-        // rely on lexer: accept IDENTIFIER, NUMBER or STRING types
-        if (current.type == Lexer.TokenType.IDENTIFIER || current.type == Lexer.TokenType.NUMBER || current.type == Lexer.TokenType.STRING) {
-            nextToken();
-            return true;
+        int line = current != null ? current.line : -1;
+        if (current != null) {
+            if (current.type == Lexer.TokenType.IDENTIFIER || current.type == Lexer.TokenType.NUMBER || current.type == Lexer.TokenType.STRING) {
+                nextToken();
+                return true;
+            }
+            // parenthesized expression
+            if ("(".equals(current.value)) {
+                nextToken();
+                if (!Expression()) {
+                    // Expression() will have added its own errors
+                    return false;
+                }
+                if (!consumeValue(")")) {
+                    localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ')' after parenthesized expression"));
+                    return false;
+                }
+                return true;
+            }
         }
-			error.add(ErrorReporter.reportSyntaxError(current.line, "Expected a valid Value (identifier, number, or string)"));
+        localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected a valid value (identifier, number, or string)"));
         return false;
     }
 
     private boolean Declaration() {
-        // current is one of var|let|const as KEYWORD
-        if (consumeValue(current.value)){
-            if (consumeType(Lexer.TokenType.IDENTIFIER)){
-                if (current.type == Lexer.TokenType.OPERATOR && "=".equals(current.value)) {
-                    nextToken();
-                    if (Expression()){
-                        if (consumeValue(";")){
-                            return true;
-                        }else {
-                            error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ';' after declaration"));
-                        }
-                    }
-                }else {
-                    error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '=' in declaration"));
-                }
-            }else {
-                error.add(ErrorReporter.reportSyntaxError(current.line, "Expected identifier in declaration"));
-            }
+        int line = current != null ? current.line : -1;
+        String kw = current != null ? current.value : null;
+        if (!consumeValue(kw)) {
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected declaration keyword (var|let|const)"));
+            return false;
         }
-        return false;
+        if (!consumeType(Lexer.TokenType.IDENTIFIER)) {
+            localErrors.add(ErrorReporter.reportIdentifierExpected(line, 0));
+            return false;
+        }
+        if (current != null && current.type == Lexer.TokenType.OPERATOR && "=".equals(current.value)) {
+            nextToken();
+            if (!Expression()) return false;
+        }
+        if (!consumeValue(";")) {
+            localErrors.add(ErrorReporter.reportSemicolonExpected(line, 0));
+            return false;
+        }
+        return true;
     }
 
     private boolean Assignment() {
-        if (consumeType(Lexer.TokenType.IDENTIFIER)){
-            if (consumeValue("=")) {
-                if (Expression()) {
-                    if (consumeValue(";")) {
-                        return true;
-                    } else {
-                        error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ';' after assignment"));
-                    }
-                }
-            }else {
-                error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '=' in assignment"));
-            }
+        int line = current != null ? current.line : -1;
+        if (!consumeType(Lexer.TokenType.IDENTIFIER)) {
+            localErrors.add(ErrorReporter.reportIdentifierExpected(line, 0));
+            return false;
         }
-        return false;
+        if (!consumeValue("=")) {
+            localErrors.add(ErrorReporter.reportUnexpectedToken(line, 0, "=", current != null ? current.value : "EOF"));
+            return false;
+        }
+        if (!Expression()) return false;
+        if (!consumeValue(";")) {
+            localErrors.add(ErrorReporter.reportSemicolonExpected(line, 0));
+            return false;
+        }
+        return true;
     }
 
     private boolean OtherStatement() {
-        // ignore tokens until ; or }
-        while (!";".equals(current.value) && !"}".equals(current.value)) {
+        // skip until ; or } or EOF
+        while (current != null && !(";".equals(current.value) || "}".equals(current.value) || current.type == Lexer.TokenType.ODF)) {
             nextToken();
         }
-        if (current != null) nextToken(); // consume ; or }
+        if (current != null && (";".equals(current.value) || "}".equals(current.value))) nextToken();
         return true;
     }
 
     private boolean isComparisonOperator(String op) {
         return "==".equals(op) || "!=".equals(op) || "<".equals(op) || 
-               ">".equals(op) || "<=".equals(op) || ">=".equals(op);
+               ">".equals(op) || "<=".equals(op) || ">=".equals(op); 
     }
-
-
 
 }
