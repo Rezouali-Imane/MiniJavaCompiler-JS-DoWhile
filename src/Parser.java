@@ -89,49 +89,50 @@ public class Parser {
 
     private boolean DoWhile() {
         if (consumeValue("do")) {
-            if (Block()) {
-                if (consumeValue("while")){
-                    if (consumeValue("(")){
-                        if(Expression()){
-                            if (consumeValue(")")){
-                                if (consumeValue(";")){
-                                    return true;
-                                }else{
-								error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ';'"));
-								}
-                            }else{
-							error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ')'"));
-							}
-                        }else{
-						error.add(ErrorReporter.reportSyntaxError(current.line, "Expected expression in do-while condition"));
-						}
-                    }else{
-					error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '('"));
-					}
-                }else
-				error.add(ErrorReporter.reportSyntaxError(current.line, "Expected 'while'"));
-				}
-            }else{
-			error.add(ErrorReporter.reportSyntaxError(current.line, "Expected 'do'"));
-			}
-			error.add(ErrorReporter.reportSyntaxError(current.line,"Invalid do-while statement"));
-            return false;
-		}
+            if (consumeValue("{")) {
+                if (Block()) {
+                    if (consumeValue("}")) {
+                        if (consumeValue("while")) {
+                            if (consumeValue("(")) {
+                                if (Expression()) {
+                                    if (consumeValue(")")) {
+                                        if (consumeValue(";")) {
+                                            return true;
+                                        } else {
+                                            error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ';'"));
+                                        }
+                                    } else {
+                                        error.add(ErrorReporter.reportSyntaxError(current.line, "Expected ')'"));
+                                    }
+                                } else {
+                                    error.add(ErrorReporter.reportSyntaxError(current.line, "Expected expression in do-while condition"));
+                                }
+                            } else {
+                                error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '('"));
+                            }
+                        } else
+                            error.add(ErrorReporter.reportSyntaxError(current.line, "Expected 'while'"));
+                    } else {
+                        error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '}' after do-while block"));
+                    }
+                } else {
+                    error.add(ErrorReporter.reportSyntaxError(current.line, "Expected 'while' after do-while block"));
+                }
+            } else {
+                error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '{' after do"));
+            }
 
+        }else{
+            error.add(ErrorReporter.reportSyntaxError(current.line, "Invalid do-while statement"));
+        }
+        return false;
+
+    }
     private boolean Block() {
-        if (consumeValue("{")) {
             if (StatementList()){
-                if (consumeValue("}")){
-                    return true;
-                }else{
-				error.add(ErrorReporter.reportSyntaxError(current.line, "Expected '}'"));
-				}
             }else{
 				error.add(ErrorReporter.reportSyntaxError(current.line, "Expected statements inside block"));
 				}
-        }else{
-			error.add(ErrorReporter.reportSyntaxError(current.line,"Expected '{' at start of block"));
-        }
         return false;
     }
 
