@@ -6,7 +6,7 @@ public class Lexer {
     //initialization of my keywords,personal keywords and operators
     private static final String[] Keywords = {"do", "while", "if", "else", "for", "switch", "case", "break", "continue", "var",
             "let", "const","return", "true", "false", "null", "undefined", "try", "catch", "finally", "throw", "new",
-            "class", "extends", "super", "this", "import", "export", "from", "as", "in", "of", "instanceof",
+            "class", "extends", "super", "this", "import", "export", "from", "as", "in", "of", "instanceof", "console", "log",
             "typeof", "void", "delete", "with", "static", "get", "set", "async", "default", "switch", "case",
             "throw", "catch", "finally", "debugger", "enum", "implements", "interface", "package", "private", "protected", "public",
             "static", "false", "true", "null", "undefined", "boolean", "number", "string", "symbol", "bigint", "yield"
