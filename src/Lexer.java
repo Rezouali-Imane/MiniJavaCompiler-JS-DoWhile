@@ -9,7 +9,7 @@ public class Lexer {
             "class", "extends", "super", "this", "import", "export", "from", "as", "in", "of", "instanceof",
             "typeof", "void", "delete", "with", "static", "get", "set", "async", "default", "switch", "case",
             "throw", "catch", "finally", "debugger", "enum", "implements", "interface", "package", "private", "protected", "public",
-            "static"
+            "static", "false", "true", "null", "undefined", "boolean", "number", "string", "symbol", "bigint", "yield"
     };
     private static final String[] PersonalKeyWords = {"Rezouali", "Imane"};
     private static final String[] Operators = {
@@ -29,7 +29,6 @@ public class Lexer {
         STRING,
         INVALID
     }
-
     //token class
     public class Token {
         public final TokenType type;
@@ -42,7 +41,6 @@ public class Lexer {
             this.value = value;
             this.line = line;
         }
-
         // Token toString method
         @Override
         public String toString() {
@@ -50,19 +48,37 @@ public class Lexer {
             //this will allow us to return a string representation of the token including its line number, type, and value
         }
     }
+    private void addCategorizedToken(Token t) {
+        tokens.add(t);
 
-
+        switch (t.type) {
+            case KEYWORD -> keywords.add(t);
+            case PERSONAL_KEYWORD -> personalKeywords.add(t);
+            case IDENTIFIER -> identifiers.add(t);
+            case NUMBER -> numbers.add(t);
+            case OPERATOR -> operators.add(t);
+            case DELIMITER -> delimiters.add(t);
+            case STRING -> strings.add(t);
+            case INVALID -> invalids.add(t);
+        }
+    }
     // lists to store tokens and errors
     private final List<Token> tokens = new ArrayList<>();
     private final List<String> errors = new ArrayList<>();
+    public final List<Token> keywords = new ArrayList<>();
+    public final List<Token> personalKeywords = new ArrayList<>();
+    public final List<Token> identifiers = new ArrayList<>();
+    public final List<Token> numbers = new ArrayList<>();
+    public final List<Token> operators = new ArrayList<>();
+    public final List<Token> delimiters = new ArrayList<>();
+    public final List<Token> strings = new ArrayList<>();
+    public final List<Token> invalids = new ArrayList<>();
 
-
-    //instead of using built-in string comparison, I implemented my own function
+    //instead of using built-in string comparison, I implemented my own
     //it compares two strings character by character and returns true if they are the same, false otherwise
     private boolean sameString(String a, String b) {
         String a2 = a + '\0';
         String b2 = b + '\0';
-
         int i = 0;
         while (true) {
             char ca = a2.charAt(i);
@@ -75,8 +91,6 @@ public class Lexer {
             i++;
         }
     }
-
-
     // keyword checker that checks if the string is in the list of keywords
     private boolean isKeyword(String s) {
         for (String keyword : Keywords) {
@@ -84,7 +98,6 @@ public class Lexer {
         }
         return false;
     }
-
     // personal keyword checker that checks if the string is in the list of personal keywords
     private boolean isPersonalKeyword(String s) {
         for (String pk : PersonalKeyWords) {
@@ -92,7 +105,6 @@ public class Lexer {
         }
         return false;
     }
-
     // operator checker that checks if the string is in the list of operators
     private boolean isOperator(String s) {
         for (String op : Operators) {
@@ -100,8 +112,6 @@ public class Lexer {
         }
         return false;
     }
-
-
     // identifier helper that returns the index of the character type
     private int indexCharForIdentifier(char c) {
         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_' || c == '$') {
@@ -146,9 +156,9 @@ public class Lexer {
     //DFA
     private boolean isNumber(String s) {
         int[][] MAT = {
-                {1, -1, -1}, // state 0
-                {1, 2, -1},  // state 1
-                {2, -1, -1}  // state 2
+                {1, -1, -1},
+                {1, 2, -1},
+                {2, -1, -1}
         };
 
         int state = 0;
@@ -194,8 +204,6 @@ public class Lexer {
             i++;
         }
     }
-
-
     public TokenType getTokenType(String s) { //determine thz token type for each string
         if (s == null || s.isEmpty()) return TokenType.INVALID; // empty string is invalid
         if (isString(s)) return TokenType.STRING;
@@ -210,12 +218,12 @@ public class Lexer {
 
     public List<Token> getTokens() {
         return tokens;
+        
     }
 
     public List<String> getErrors() {
         return errors;
     }
-
 
     // main tokenization function
     private void tokenize(String code) {
@@ -295,7 +303,7 @@ public class Lexer {
             }
             //delimiters
             if (isDelimiter(c)) {
-                tokens.add(new Token(TokenType.DELIMITER, "" + c, line));
+                addCategorizedToken(new Token(TokenType.DELIMITER, "" + c, line));
                 i++;
                 continue;
             }
@@ -321,7 +329,7 @@ public class Lexer {
             }
 
             if (bestMatchLen > 0) {
-                tokens.add(new Token(TokenType.OPERATOR, bestMatchOp, line));
+                addCategorizedToken(new Token(TokenType.OPERATOR, bestMatchOp, line));
                 i += bestMatchLen;
                 continue;
             }
@@ -348,7 +356,7 @@ public class Lexer {
                 }
 
                 if (closed) {
-                    tokens.add(new Token(TokenType.STRING, sb.toString(), strLine));
+                    addCategorizedToken(new Token(TokenType.STRING, sb.toString(), strLine));
                 } else {
                     errors.add(ErrorReporter.reportUnterminatedString(strLine, column, sb.toString()));
                     if (code.charAt(i) == '\n') { line++; i++; }
@@ -356,7 +364,6 @@ public class Lexer {
                 }
                 continue;
             }
-
             // identifiers, numbers, and invalid tokens
             StringBuilder tokenBuilder = new StringBuilder();
             int tokenStartLine = line;
@@ -408,14 +415,14 @@ public class Lexer {
                 char first = tokenStr.charAt(0);
                 if (first >= '0' && first <= '9') {
                     if (isNumber(tokenStr)) {
-                        tokens.add(new Token(TokenType.NUMBER, tokenStr, tokenStartLine));
+                        addCategorizedToken(new Token(TokenType.NUMBER, tokenStr, tokenStartLine));
                     } else {
                         errors.add(ErrorReporter.reportInvalidNumber(tokenStartLine, tokenStartColumn, tokenStr));
                     }
                 } else if ((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_' || first == '$') {
-                    if (isKeyword(tokenStr)) tokens.add(new Token(TokenType.KEYWORD, tokenStr, tokenStartLine));
-                    else if (isPersonalKeyword(tokenStr)) tokens.add(new Token(TokenType.PERSONAL_KEYWORD, tokenStr, tokenStartLine));
-                    else if (isIdentifier(tokenStr)) tokens.add(new Token(TokenType.IDENTIFIER, tokenStr, tokenStartLine));
+                    if (isKeyword(tokenStr)) addCategorizedToken(new Token(TokenType.KEYWORD, tokenStr, tokenStartLine));
+                    else if (isPersonalKeyword(tokenStr)) addCategorizedToken(new Token(TokenType.PERSONAL_KEYWORD, tokenStr, tokenStartLine));
+                    else if (isIdentifier(tokenStr)) addCategorizedToken(new Token(TokenType.IDENTIFIER, tokenStr, tokenStartLine));
                     else errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
                 } else {
                     if (tokenStr.length() == 1) {
@@ -429,8 +436,8 @@ public class Lexer {
 
         } while (code.charAt(i) != '\0');
     }
+
     public Lexer(String code) {
         tokenize(code);
     }
 }
-
