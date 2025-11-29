@@ -1,5 +1,6 @@
 import javax.swing.*;
 import javax.swing.text.*;
+import javax.swing.event.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.List;
@@ -11,16 +12,18 @@ public class Main {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(1000, 700);
 
-        // ---- CODE EDITOR ----
         JTextPane codeArea = new JTextPane();
         codeArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
         codeArea.setBackground(Color.BLACK);
         codeArea.setForeground(Color.WHITE);
         codeArea.setCaretColor(Color.WHITE);
+
         JScrollPane codeScroll = new JScrollPane(codeArea);
         codeScroll.setPreferredSize(new Dimension(1000, 400));
 
-        // ---- TERMINAL ----
+        LineNumber lineNumbers = new LineNumber(codeArea);
+        codeScroll.setRowHeaderView(lineNumbers);
+
         JTextArea outputArea = new JTextArea();
         outputArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
         outputArea.setEditable(false);
@@ -29,7 +32,6 @@ public class Main {
         JScrollPane outputScroll = new JScrollPane(outputArea);
         outputScroll.setPreferredSize(new Dimension(1000, 250));
 
-        // ---- BUTTONS ----
         JButton compileBtn = new JButton("Compile");
         JButton eraseBtn = new JButton("Erase");
         JButton tokensBtn = new JButton("Show Tokens");
@@ -39,33 +41,57 @@ public class Main {
         buttonPanel.add(eraseBtn);
         buttonPanel.add(tokensBtn);
 
-        // ---- LAYOUT ----
         frame.setLayout(new BorderLayout());
         frame.add(codeScroll, BorderLayout.CENTER);
         frame.add(buttonPanel, BorderLayout.NORTH);
         frame.add(outputScroll, BorderLayout.SOUTH);
 
-        // ---- BUTTON ACTIONS ----
         compileBtn.addActionListener(e -> {
             String code = codeArea.getText();
-            List<String> errors = new ArrayList<>();
+            List<String> lexicalErrors = new ArrayList<>();
+            List<String> syntaxErrors = new ArrayList<>();
             code += "\0"; // EOF marker
 
-            Lexer lexer = new Lexer(code, errors);
-            Parser parser = new Parser(lexer, errors);
+            // Lexical analysis
+            Lexer lexer = new Lexer(code, lexicalErrors);
+            List<Lexer.Token> tokens = lexer.getTokens();
+
+            // Parsing
+            Parser parser = new Parser(lexer, syntaxErrors);
             boolean parsed = parser.Program();
 
+            // Display results
             outputArea.setText("");
-            if (!errors.isEmpty()) {
-                for (String err : errors) {
+
+            boolean hasLexicalErrors = !lexicalErrors.isEmpty();
+            boolean hasSyntaxErrors = !syntaxErrors.isEmpty();
+
+            if (hasLexicalErrors) {
+                outputArea.append("=== Lexical Errors ===\n");
+                for (String err : lexicalErrors) {
                     outputArea.append(err + "\n");
                 }
+                outputArea.append("\n");
             }
-            outputArea.append("\nLexing successful!\n");
-            outputArea.append(parsed ? "Parsing successful!\n" : "Parsing failed!\n");
 
-            // Highlight tokens
-            highlightTokens(codeArea, lexer.getTokens());
+            if (hasSyntaxErrors) {
+                outputArea.append("=== Syntax Errors ===\n");
+                for (String err : syntaxErrors) {
+                    outputArea.append(err + "\n");
+                }
+                outputArea.append("\n");
+            }
+
+            if (!hasLexicalErrors && !hasSyntaxErrors) {
+                outputArea.append("Lexical analysis successful!\n");
+                outputArea.append("Parsing successful!\n");
+                outputArea.append("\nCompiling successful!\n");
+            } else {
+                outputArea.append("Compiling failed!\n");
+            }
+
+
+            highlightTokens(codeArea, tokens);
         });
 
         eraseBtn.addActionListener(e -> codeArea.setText(""));
@@ -74,17 +100,14 @@ public class Main {
             String code = codeArea.getText();
             List<String> errors = new ArrayList<>();
             Lexer lexer = new Lexer(code, errors);
-            for (Lexer.Token t : lexer.getTokens()) {
-                System.out.println(t.type + " -> " + t.value);
-            }
+            List<Lexer.Token> tokens = lexer.getTokens();
 
             outputArea.setText("");
-            for (Lexer.Token t : lexer.getTokens()) {
+            for (Lexer.Token t : tokens) {
                 outputArea.append(t.toString() + "\n");
             }
         });
 
-        // ---- SHIFT+ENTER new line ----
         codeArea.addKeyListener(new KeyAdapter() {
             public void keyPressed(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_ENTER && e.isShiftDown()) {
@@ -97,7 +120,6 @@ public class Main {
         frame.setVisible(true);
     }
 
-    // ---- TOKEN HIGHLIGHTING ----
     private static void highlightTokens(JTextPane codeArea, List<Lexer.Token> tokens) {
         StyledDocument doc = codeArea.getStyledDocument();
         StyleContext sc = StyleContext.getDefaultStyleContext();
@@ -125,6 +147,39 @@ public class Main {
                         sc.addAttribute(SimpleAttributeSet.EMPTY, StyleConstants.Foreground, color), true);
                 searchPos = startIndex + val.length();
             } catch (Exception ignored) {}
+        }
+    }
+}
+
+class LineNumber extends JPanel {
+    private final JTextPane textPane;
+    private final Font font = new Font("Monospaced", Font.PLAIN, 14);
+
+    public LineNumber(JTextPane textPane) {
+        this.textPane = textPane;
+        setPreferredSize(new Dimension(50, Integer.MAX_VALUE));
+        setBackground(Color.BLACK);
+        setForeground(Color.WHITE);
+
+        textPane.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent e) { repaint(); }
+            public void removeUpdate(DocumentEvent e) { repaint(); }
+            public void changedUpdate(DocumentEvent e) { repaint(); }
+        });
+    }
+
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        g.setColor(getForeground());
+        g.setFont(font);
+        int lineHeight = textPane.getFontMetrics(textPane.getFont()).getHeight();
+        int y = lineHeight;
+
+        int totalLines = textPane.getDocument().getDefaultRootElement().getElementCount();
+        for (int i = 1; i <= totalLines; i++) {
+            g.drawString(String.valueOf(i), 5, y - 4);
+            y += lineHeight;
         }
     }
 }

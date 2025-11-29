@@ -18,8 +18,13 @@ public class Parser {
 
     private void nextToken() {
         index++;
-        current = tokens.get(index);
+        if (index < tokens.size()) {
+            current = tokens.get(index);
+        } else {
+            current = null;  // signal end of input
+        }
     }
+
 
     private boolean consumeValue(String v) {
         if (v == null || current == null) return false;
@@ -45,122 +50,164 @@ public class Parser {
 
     // Program -> StatementList EOF
     public boolean Program() {
-        boolean ok = StatementList();
-        if (!ok) {
-            if (errors != null) errors.addAll(localErrors);
-            return false;
+        StatementList();
+        if (current != null && current.type == Lexer.TokenType.ODF) {
+            nextToken();
         }
-
-        if (isAtEnd()) {
-            // success: do not merge localErrors
-            return true;
+        if (!isAtEnd()) {
+            int line = current.line;
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected end of file"));
         }
-
-        // not at EOF -> record error and merge
-        int line = current != null ? current.line : -1;
-        localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected end of file"));
-        if (errors != null) errors.addAll(localErrors);
-        return false;
+        if (errors != null && !localErrors.isEmpty()) errors.addAll(localErrors);
+        return localErrors.isEmpty();
     }
+
 
     // StatementList -> Statement*
     public boolean StatementList() {
         while (!isAtEnd() && !(current != null && "}".equals(current.value))) {
+            int startLine = current != null ? current.line : -1;
+            int errorsBefore = localErrors.size();
+
             if (!Statement()) {
-                int line = current != null ? current.line : -1;
-                localErrors.add(ErrorReporter.reportSyntaxError(line, "Invalid statement in statement list"));
-                return false;
+                // If Statement() fails, add generic error if none added
+                if (localErrors.size() == errorsBefore) {
+                    localErrors.add(ErrorReporter.reportSyntaxError(startLine, "Invalid statement"));
+                }
+                // Skip tokens until next semicolon or closing brace
+                while (!isAtEnd() && current != null && !";".equals(current.value) && !"}".equals(current.value)) {
+                    nextToken();
+                }
+                // Consume the semicolon if present
+                if (current != null && ";".equals(current.value)) nextToken();
             }
         }
-        return true; // epsilon allowed
+        return true;
     }
+
 
     // Statement -> DoWhile | Declaration | Assignment | OtherStatement
-    public boolean Statement() {
-        if (current == null) {
-            localErrors.add(ErrorReporter.reportSyntaxError(-1, "Unexpected end of input while parsing statement"));
-            return false;
-        }
+    private boolean Statement() {
+        if (current == null) return false;
+
+        int startIndex = index; 
+        boolean ok;
 
         if (current.type == Lexer.TokenType.KEYWORD && "do".equals(current.value)) {
-            return DoWhile();
+            ok = DoWhile();
         } else if (current.type == Lexer.TokenType.KEYWORD && ("var".equals(current.value) || "let".equals(current.value) || "const".equals(current.value))) {
-            return Declaration();
+            ok = Declaration();
         } else if (current.type == Lexer.TokenType.IDENTIFIER) {
-            // lookahead: if identifier followed by '=' it's an assignment, otherwise treat as other statement (calls, property access, etc.)
-            // rely on lexer sentinel token; peek the next token directly
-            Lexer.Token next = tokens.get(index + 1);
-            if (next.type == Lexer.TokenType.OPERATOR && "=".equals(next.value)) {
-                return Assignment();
+            Lexer.Token next = (index + 1 < tokens.size()) ? tokens.get(index + 1) : null;
+            if (next != null && next.type == Lexer.TokenType.OPERATOR && "=".equals(next.value)) {
+                ok = Assignment();
             } else {
-                return OtherStatement();
+                ok = OtherStatement();
             }
         } else {
-            return OtherStatement();
+            ok = OtherStatement();
         }
+        if (!ok && index == startIndex) {
+            nextToken();
+        }
+
+        return ok;
     }
+
 
     private boolean DoWhile() {
         int line = current != null ? current.line : -1;
+        boolean ok = true;
+
         if (!consumeValue("do")) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected 'do' at start of do-while"));
-            return false;
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected 'do'"));
+            ok = false;
         }
-        if (!Block()) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Invalid block after 'do'"));
-            return false;
-        }
+
+        if (!Block()) ok = false;
+
         if (!consumeValue("while")) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected 'while' after do-block"));
-            return false;
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected 'while'"));
+            ok = false;
         }
+
         if (!consumeValue("(")) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected '(' after 'while'"));
-            return false;
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected '('"));
+            ok = false;
         }
-        if (!Expression()) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected expression in do-while condition"));
-            return false;
-        }
+
+        if (!Expression()) ok = false;
+
         if (!consumeValue(")")) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ')' after do-while condition"));
-            return false;
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ')'"));
+            ok = false;
         }
+
         if (!consumeValue(";")) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ';' after do-while statement"));
-            return false;
+            localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected ';'"));
+            ok = false;
         }
-        return true;
+        while (!isAtEnd() && current != null && !";".equals(current.value) && !"}".equals(current.value)) {
+            nextToken();
+        }
+        if (current != null && (";".equals(current.value) || "}".equals(current.value))) nextToken();
+
+        return ok;
     }
 
+
+
+    // Block -> { StatementList }
     private boolean Block() {
         int line = current != null ? current.line : -1;
+        boolean ok = true;
+
         if (!consumeValue("{")) {
             localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected '{' at start of block"));
-            return false;
+            ok = false;
+            while (!isAtEnd() && current != null && !"{".equals(current.value) && !"}".equals(current.value)) {
+                nextToken();
+            }
+            if (current != null && "{".equals(current.value)) nextToken();
         }
-        if (!StatementList()) {
-            localErrors.add(ErrorReporter.reportSyntaxError(line, "Invalid statements inside block"));
-            return false;
-        }
-        if (!consumeValue("}")) {
+
+        StatementList();
+
+        if (current != null && "}".equals(current.value)) {
+            nextToken();
+        } else {
             localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected '}' at end of block"));
-            return false;
+            ok = false;
+            // skip until next } to continue parsing
+            while (!isAtEnd() && current != null && !"}".equals(current.value)) {
+                nextToken();
+            }
+            if (current != null && "}".equals(current.value)) nextToken();
         }
-        return true;
+
+        return ok;
     }
+
+
 
     // Expression: Value ((op) Value)*  -- simple flat expression (no precedence)
     private boolean Expression() {
         int line = current != null ? current.line : -1;
         if (!Value()) {
             localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected a valid expression"));
+            while (!isAtEnd() && current != null && !";".equals(current.value) && !"}".equals(current.value)) {
+                nextToken();
+            }
             return false;
         }
-        while (current != null && current.type == Lexer.TokenType.OPERATOR && (isComparisonOperator(current.value) || isArithmeticOperator(current.value))) {
-            nextToken(); // consume operator
+        while (current != null && current.type == Lexer.TokenType.OPERATOR &&
+                (isComparisonOperator(current.value) || isArithmeticOperator(current.value))) {
+            nextToken();
             if (!Value()) {
                 localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected value after operator"));
+                while (!isAtEnd() && current != null && !";".equals(current.value) && !"}".equals(current.value)) {
+                    nextToken();
+                }
                 return false;
             }
         }
@@ -182,7 +229,6 @@ public class Parser {
             if ("(".equals(current.value)) {
                 nextToken();
                 if (!Expression()) {
-                    // Expression() will have added its own errors
                     return false;
                 }
                 if (!consumeValue(")")) {
@@ -201,10 +247,12 @@ public class Parser {
         String kw = current != null ? current.value : null;
         if (!consumeValue(kw)) {
             localErrors.add(ErrorReporter.reportSyntaxError(line, "Expected declaration keyword (var|let|const)"));
+            if (current != null) nextToken(); // skip a token
             return false;
         }
         if (!consumeType(Lexer.TokenType.IDENTIFIER)) {
             localErrors.add(ErrorReporter.reportIdentifierExpected(line, 0));
+            if (current != null) nextToken();
             return false;
         }
         if (current != null && current.type == Lexer.TokenType.OPERATOR && "=".equals(current.value)) {
@@ -213,10 +261,12 @@ public class Parser {
         }
         if (!consumeValue(";")) {
             localErrors.add(ErrorReporter.reportSemicolonExpected(line, 0));
+            if (current != null) nextToken();
             return false;
         }
         return true;
     }
+
 
     private boolean Assignment() {
         int line = current != null ? current.line : -1;
@@ -248,6 +298,9 @@ public class Parser {
     private boolean isComparisonOperator(String op) {
         return "==".equals(op) || "!=".equals(op) || "<".equals(op) || 
                ">".equals(op) || "<=".equals(op) || ">=".equals(op); 
+    }
+
+    public static void main(String[] args) {
     }
 
 }

@@ -49,20 +49,7 @@ public class Lexer {
             //this will allow us to return a string representation of the token including its line number, type, and value
         }
     }
-    private void addCategorizedToken(Token t) {
-        tokens.add(t);
-
-        switch (t.type) {
-            case KEYWORD -> keywords.add(t);
-            case PERSONAL_KEYWORD -> personalKeywords.add(t);
-            case IDENTIFIER -> identifiers.add(t);
-            case NUMBER -> numbers.add(t);
-            case OPERATOR -> operators.add(t);
-            case DELIMITER -> delimiters.add(t);
-            case STRING -> strings.add(t);
-            case INVALID -> invalids.add(t);
-        }
-    }
+   
     // lists to store tokens and errors
     private final List<Token> tokens = new ArrayList<>();
     private final List<String> errors = new ArrayList<>();
@@ -304,7 +291,7 @@ public class Lexer {
             }
             //delimiters
             if (isDelimiter(c)) {
-                addCategorizedToken(new Token(TokenType.DELIMITER, "" + c, line));
+                tokens.add(new Token(TokenType.DELIMITER, "" + c, line));
                 i++;
                 continue;
             }
@@ -330,7 +317,7 @@ public class Lexer {
             }
 
             if (bestMatchLen > 0) {
-                addCategorizedToken(new Token(TokenType.OPERATOR, bestMatchOp, line));
+                tokens.add(new Token(TokenType.OPERATOR, bestMatchOp, line));
                 i += bestMatchLen;
                 continue;
             }
@@ -357,7 +344,7 @@ public class Lexer {
                 }
 
                 if (closed) {
-                    addCategorizedToken(new Token(TokenType.STRING, sb.toString(), strLine));
+                    tokens.add(new Token(TokenType.STRING, sb.toString(), strLine));
                 } else {
                     errors.add(ErrorReporter.reportUnterminatedString(strLine, column, sb.toString()));
                     if (code.charAt(i) == '\n') { line++; i++; }
@@ -416,15 +403,18 @@ public class Lexer {
                 char first = tokenStr.charAt(0);
                 if (first >= '0' && first <= '9') {
                     if (isNumber(tokenStr)) {
-                        addCategorizedToken(new Token(TokenType.NUMBER, tokenStr, tokenStartLine));
+                        tokens.add(new Token(TokenType.NUMBER, tokenStr, tokenStartLine));
                     } else {
-                        errors.add(ErrorReporter.reportInvalidNumber(tokenStartLine, tokenStartColumn, tokenStr));
+                        errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
                     }
                 } else if ((first >= 'A' && first <= 'Z') || (first >= 'a' && first <= 'z') || first == '_' || first == '$') {
-                    if (isKeyword(tokenStr)) addCategorizedToken(new Token(TokenType.KEYWORD, tokenStr, tokenStartLine));
-                    else if (isPersonalKeyword(tokenStr)) addCategorizedToken(new Token(TokenType.PERSONAL_KEYWORD, tokenStr, tokenStartLine));
-                    else if (isIdentifier(tokenStr)) addCategorizedToken(new Token(TokenType.IDENTIFIER, tokenStr, tokenStartLine));
-                    else errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
+                    if (isKeyword(tokenStr)) tokens.add(new Token(TokenType.KEYWORD, tokenStr, tokenStartLine));
+                    else if (isPersonalKeyword(tokenStr)) tokens.add(new Token(TokenType.PERSONAL_KEYWORD, tokenStr, tokenStartLine));
+                    else if (isIdentifier(tokenStr)) tokens.add(new Token(TokenType.IDENTIFIER, tokenStr, tokenStartLine));
+                    else {
+                        // Unknown identifier-like lexeme: report and emit INVALID token
+                        errors.add(ErrorReporter.reportInvalidToken(tokenStartLine, tokenStartColumn, tokenStr));
+                    }
                 } else {
                     if (tokenStr.length() == 1) {
                         char bad = tokenStr.charAt(0);
@@ -437,10 +427,16 @@ public class Lexer {
 
 
         } while (code.charAt(i) != '\0');
+
+
         tokens.add(new Token(TokenType.ODF, "\0", line));
     }
 
     public Lexer(String code, List<String> errors) {
         tokenize(code);
+        if (errors != null) {
+            errors.addAll(this.errors);
+        }
     }
+
 }
