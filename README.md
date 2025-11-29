@@ -73,11 +73,34 @@ Anyone wanting to test this from another machine should follow these steps:
 2. **Ensure Java is installed** (Java JDK 8 or higher).
 
 3. **Run the executable:**
-  - **Option 1:** Double-click the `MiniJSIDE.jar` file.
-  - **Option 2:** Run via terminal:
+  - **Option 1:** Run via terminal(if you have java 23 or higher):
     ```bash
     java -jar MiniJSIDE.jar
     ```
+    - **Option 2:**  Building a New JAR(if you have java 8 to 22):
+      - Open terminal in the project directory.
+      - delete any previous `out` directory
+        ```bash
+        rm -rf out
+        ```
+      - delete any previous `MiniJSIDE.jar` file
+        ```bash
+        rm MiniJSIDE.jar
+        ```
+      - Create output directory:
+      - Compile the source files:
+        ```bash
+        javac -d out src/com/minijside/*.java
+        ```
+      - Create the JAR file:
+        ```bash
+        jar cfe MiniJSIDE.jar com.minijside.MiniJSIDE -C out .
+        ```
+      - Run the JAR file:
+        ```bash
+        java -jar MiniJSIDE.jar
+        ```
+        
 
 4. **Using the IDE:**
   - Write, compile, and test JavaScript `do...while` loops.
