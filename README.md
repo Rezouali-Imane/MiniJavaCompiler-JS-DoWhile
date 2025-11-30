@@ -77,7 +77,7 @@ Anyone wanting to test this from another machine should follow these steps:
     ```bash
     java -jar MiniJSIDE.jar
     ```
-    - **Option 2:**  Building a New JAR(if you have java 8 to 22):
+ - **Option 2:**  Building a New JAR(if you have java 8 to 22):
       - Open terminal in the project directory.
       - delete any previous `out` directory
         ```bash
