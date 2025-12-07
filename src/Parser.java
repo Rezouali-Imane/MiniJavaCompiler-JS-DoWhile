@@ -114,7 +114,7 @@ public class Parser {
         return ok;
     }
 
-
+// DoWhile -> do Block while ( Expression ) ;
     private boolean DoWhile() {
         int line = current != null ? current.line : -1;
         boolean ok = true;
@@ -214,6 +214,7 @@ public class Parser {
         return true;
     }
 
+    // Helper to identify arithmetic operators
     private boolean isArithmeticOperator(String op) {
         return "+".equals(op) || "-".equals(op) || "*".equals(op) || "/".equals(op) || "%".equals(op);
     }
@@ -246,7 +247,7 @@ public class Parser {
         return false;
     }
 
-
+     // Declaration -> (var|let|const) Identifier ( = Expression ) ;
     private boolean Declaration() {
         int line = current != null ? current.line : -1;
         String kw = current != null ? current.value : null;
@@ -272,7 +273,7 @@ public class Parser {
         return true;
     }
 
-
+     // Assignment -> Identifier = Expression ;
     private boolean Assignment() {
         int line = current != null ? current.line : -1;
         if (!consumeType(Lexer.TokenType.IDENTIFIER)) {
@@ -291,6 +292,7 @@ public class Parser {
         return true;
     }
 
+    // OtherStatement -> skip until ; or } or EOF
     private boolean OtherStatement() {
         // skip until ; or } or EOF
         while (current != null && !(";".equals(current.value) || "}".equals(current.value) || current.type == Lexer.TokenType.ODF)) {
@@ -300,6 +302,7 @@ public class Parser {
         return true;
     }
 
+    // Helper to identify comparison operators
     private boolean isComparisonOperator(String op) {
         return "==".equals(op) || "!=".equals(op) || "<".equals(op) || 
                ">".equals(op) || "<=".equals(op) || ">=".equals(op); 
