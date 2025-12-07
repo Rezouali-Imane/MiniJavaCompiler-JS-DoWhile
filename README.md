@@ -75,7 +75,7 @@ Anyone wanting to test this from another machine should follow these steps:
 3. **Run the executable:**
   - **Option 1:** Run via terminal(if you have java 23 or higher):
     ```bash
-    java -jar MiniJSIDE.jar
+    java -jar B3_Rezouali_Imane.jar
     ```
  - **Option 2:**  Building a New JAR(if you have java 8 to 22):
       - Open terminal in the project directory.
@@ -85,7 +85,7 @@ Anyone wanting to test this from another machine should follow these steps:
         ```
       - delete any previous `MiniJSIDE.jar` file
         ```bash
-        rm MiniJSIDE.jar
+        rm B3_Rezouali_Imane.jar
         ```
       - Create output directory:
       - Compile the source files:
@@ -94,11 +94,11 @@ Anyone wanting to test this from another machine should follow these steps:
         ```
       - Create the JAR file:
         ```bash
-        jar cfe MiniJSIDE.jar com.minijside.MiniJSIDE -C out .
+        jar cfe B3_Rezouali_Imane.jar com.minijside.MiniJSIDE -C out .
         ```
       - Run the JAR file:
         ```bash
-        java -jar MiniJSIDE.jar
+        java -jar B3_Rezouali_Imane.jar
         ```
         
 
